@@ -9,18 +9,17 @@ import (
 )
 
 /**
- * Find the end line index of the exclusive component
+ * Removes the exclusive component from the file content
  * @param {string} line - The line of the file
  * @param {int} lineIndex - The index of the line
  * @param {bufio.Reader} reader - The reader of the file
  * @param {[]string} fileContentLines - The content of the file
  * @return {int} - The end line index of the exclusive component
  */
-func findExclusiveComponentEndLineIndex(
+func removeExclusiveComponent(
 	line string,
 	lineIndex int,
 	reader *bufio.Reader,
-	fileContentLines []string,
 ) int {
 	if strings.Contains(line, "</EXCLUSIVE") {
 		return lineIndex
@@ -33,13 +32,53 @@ func findExclusiveComponentEndLineIndex(
 				break
 			}
 			var currentLine string = string(nextLine)
-			fileContentLines = append(fileContentLines, currentLine)
+			// fileContentLines = append(fileContentLines, currentLine)
 			if strings.Contains(currentLine, "</EXCLUSIVE") {
 				return componentEndLineIndex
 			}
 		}
 	}
 	return -1
+}
+
+/**
+ * Check if the directive type matches
+ * @param {string} directiveType - The directive type
+ * @param {string} line - The line of the file
+ * @return {bool} - If the directive type matches
+ */
+func isMatchingDirectiveType(
+	directiveType string,
+	line string,
+) bool {
+	return strings.Contains(line, directiveType) || strings.Contains(line, "*")
+}
+
+func findExclusiveComponentParams(
+	directiveType string,
+	lineIndex int,
+	reader *bufio.Reader,
+	fileContentLines []string,
+) ([]string, bool) {
+	tempFileContentLines := fileContentLines
+	for {
+		lineIndex++
+		nextLine, err := reader.ReadString('\n')
+		if err != nil {
+			break
+		}
+		currentLine := string(nextLine)
+		tempFileContentLines = append(tempFileContentLines, currentLine)
+		if strings.Contains(currentLine, "OF") && !isMatchingDirectiveType(directiveType, currentLine) {
+			return fileContentLines, false
+		} // check if the directive type matches
+		if strings.Contains(currentLine, ">") {
+			fileContentLines = tempFileContentLines
+			return fileContentLines, true
+		}
+	}
+	// Case occurs when exclusive component is not closed
+	return nil, false
 }
 
 /**
@@ -66,20 +105,18 @@ func parseJavascriptFile(path string, directiveType string) {
 		fileContentLines = append(fileContentLines, line)
 		// Exclusive component can be on the same line or on following line
 		var lineString string = string(line)
-		if strings.Contains(lineString, "<EXCLUSIVE") && !strings.Contains(lineString, directiveType) {
-			var componentEndLineIndex int = findExclusiveComponentEndLineIndex(
+		var useExclusiveComponent bool
+		fileContentLines, useExclusiveComponent = findExclusiveComponentParams(directiveType, lineIndex, reader, fileContentLines)
+		if !useExclusiveComponent {
+			removeExclusiveComponent(
 				lineString,
 				lineIndex,
 				reader,
-				fileContentLines,
 			)
-			if lineIndex > componentEndLineIndex {
-			}
-			var exclusiveComponent []string = fileContentLines[lineIndex : componentEndLineIndex+1]
-			fmt.Println("Content of Exclusive Component:", exclusiveComponent)
 		}
 		lineIndex++
 	}
+	fmt.Println(path, fileContentLines)
 }
 
 /**
