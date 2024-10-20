@@ -78,6 +78,7 @@ func findExclusiveComponentParams(
 		}
 	}
 	// Case occurs when exclusive component is not closed
+	// TODO: Add error handling (Throw an error and stop the program)
 	return nil, false
 }
 
@@ -116,7 +117,6 @@ func parseJavascriptFile(path string, directiveType string) {
 		}
 		lineIndex++
 	}
-	fmt.Println(path, fileContentLines)
 }
 
 /**
@@ -133,6 +133,10 @@ func isJavascriptFile(path string) bool {
 		}
 	}
 	return false
+}
+
+func removeTauriDependencies() {
+
 }
 
 /**
@@ -154,8 +158,15 @@ func walkFilePath(path string, directiveType string) {
 }
 
 func main() {
-	var path string = "/home/sanner/Coding/RAN/ran-app-native/src"
-	var directiveType string = "web"
+	var path string = "/home/sanner/Coding/RAN/ran-app-native/"
 	fmt.Println("Path:", path)
-	walkFilePath(path, directiveType)
+	deviceTypes := []string{"web", "mobile"}
+
+	var buildPath string = path + "/build-target"
+	os.Mkdir(buildPath, 0777)
+	for _, deviceType := range deviceTypes {
+		var deviceBuildPath string = buildPath + "/" + deviceType
+		os.Mkdir(deviceBuildPath, 0777)
+		walkFilePath(path, deviceType)
+	}
 }
