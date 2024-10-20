@@ -135,8 +135,12 @@ func isJavascriptFile(path string) bool {
 	return false
 }
 
-func removeTauriDependencies() {
-
+func parsePathDifference(srcPath string, dstDir string) string {
+	rel, err := filepath.Rel(srcPath, dstDir)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return rel
 }
 
 /**
@@ -144,8 +148,16 @@ func removeTauriDependencies() {
  * @param {string} path - The path of the file
  * @param {string} directiveType - The directive type
  */
-func walkFilePath(path string, directiveType string) {
-	filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+func walkFilePath(srcDir string, directiveType string, dstDir string) {
+	filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() {
+			var pathDifference string = parsePathDifference(srcDir, path)
+			newDir := dstDir + pathDifference
+			fmt.Println("Directory:", newDir)
+			os.MkdirAll(dstDir+pathDifference, 0777)
+		} else {
+			// fmt.Println("File:", path)
+		}
 		if err != nil {
 			fmt.Println(err)
 			return nil
@@ -158,15 +170,15 @@ func walkFilePath(path string, directiveType string) {
 }
 
 func main() {
-	var path string = "/home/sanner/Coding/RAN/ran-app-native/"
+	var path string = "/home/sanner/Coding/RAN/ran-app-native/src"
 	fmt.Println("Path:", path)
-	deviceTypes := []string{"web", "mobile"}
+	deviceTypes := []string{"mobile"}
 
 	var buildPath string = path + "/build-target"
 	os.Mkdir(buildPath, 0777)
 	for _, deviceType := range deviceTypes {
 		var deviceBuildPath string = buildPath + "/" + deviceType
 		os.Mkdir(deviceBuildPath, 0777)
-		walkFilePath(path, deviceType)
+		walkFilePath(path, deviceType, deviceBuildPath)
 	}
 }
