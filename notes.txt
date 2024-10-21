@@ -1,4 +1,0 @@
-# How to Parse tauri imports (for web)
-go into package.json and extract all imports pertaining to tauri and store in memory
-go into each file and remove all imports related to tauri
-store each of the function calls and delete all invocations/definitions of the function and delete
