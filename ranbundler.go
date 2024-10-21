@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 )
@@ -88,14 +87,13 @@ func findExclusiveComponentParams(
  * Parse the javascript file
  * @param {string} path - The path of the file
  */
-func parseJavascriptFile(path string, directiveType string) {
+func parseJavascriptFile(path string, directiveType string) string {
 	file, err := os.Open(path)
 	if err != nil {
 		fmt.Println(err)
-		return
+		return err.Error()
 	}
 	defer file.Close()
-
 	reader := bufio.NewReader(file)
 	var lineIndex int = 0
 	// Read and print lines
@@ -103,10 +101,10 @@ func parseJavascriptFile(path string, directiveType string) {
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
+			fmt.Println(err)
 			break
 		}
 		fileContentLines = append(fileContentLines, line)
-		// Exclusive component can be on the same line or on following line
 		var lineString string = string(line)
 		var useExclusiveComponent bool
 		fileContentLines, useExclusiveComponent = findExclusiveComponentParams(directiveType, lineIndex, reader, fileContentLines)
@@ -119,6 +117,7 @@ func parseJavascriptFile(path string, directiveType string) {
 		}
 		lineIndex++
 	}
+	return strings.Join(fileContentLines, "")
 }
 
 /**
@@ -137,51 +136,55 @@ func isJavascriptFile(path string) bool {
 	return false
 }
 
-func parsePathDifference(srcPath string, dstDir string) (string, string) {
-	rel, err := filepath.Rel(srcPath, dstDir)
-	if err != nil {
-		fmt.Println(err)
-	}
-	file, dir := path.Split(rel)
-
-	// Join all components except the last one
-	fmt.Println("Dir Path:", dir)
-	return file, dir
-}
-
 /**
  * Walk through the file path
  * @param {string} path - The path of the file
  * @param {string} directiveType - The directive type
  */
-func walkFilePath(srcDir string, directiveType string, dstDir string) {
+func walkFilePath(srcDir string, directiveBuildPath string, directiveType string) {
 	filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
-		newPath := strings.ReplaceAll(path, "src", dstDir)
+		newPath := strings.ReplaceAll(path, "src", directiveBuildPath)
 		if info.IsDir() {
-			os.Mkdir(newPath, 0777)
+			os.MkdirAll(newPath, 0777)
 		} else {
+			// TODO: consider returning conditional stating that the file has not Exclusive component
 			if isJavascriptFile(path) {
-				parseJavascriptFile(path, directiveType)
-			}
-			srcFile, err := os.Open(path)
-			if err != nil {
-				fmt.Println(err)
-				return err
-			}
-			defer srcFile.Close()
+				var fileContent = parseJavascriptFile(path, directiveType)
+				fmt.Println("File content:", fileContent)
+				file, err := os.Create(newPath)
+				if err != nil {
+					fmt.Println("Error opening file:", err)
+					return err
+				}
+				defer file.Close() // Ensure file is closed when function exits
 
-			dstFile, err := os.Create(newPath)
-			if err != nil {
-				fmt.Println(err)
-				return err
-			}
-			defer dstFile.Close()
+				_, err = file.WriteString(fileContent)
+				if err != nil {
+					fmt.Println("Error writing to file:", err)
+					return err
+				}
+			} else {
+				srcFile, err := os.Open(path)
+				if err != nil {
+					fmt.Println(err)
+					return err
+				}
+				defer srcFile.Close()
 
-			_, err = io.Copy(dstFile, srcFile)
-			if err != nil {
-				fmt.Println(err)
-				return err
+				dstFile, err := os.Create(newPath)
+				if err != nil {
+					fmt.Println(err)
+					return err
+				}
+				defer dstFile.Close()
+
+				_, err = io.Copy(dstFile, srcFile)
+				if err != nil {
+					fmt.Println(err)
+					return err
+				}
 			}
+
 		}
 		if err != nil {
 			fmt.Println(err)
@@ -195,13 +198,9 @@ func walkFilePath(srcDir string, directiveType string, dstDir string) {
 func main() {
 	var path string = "/home/sanner/Coding/RAN/ran-app-native/src"
 	fmt.Println("Path:", path)
-	deviceTypes := []string{"mobile"}
-
-	var buildPath string = "build-target"
-	os.Mkdir(buildPath, 0777)
+	deviceTypes := []string{"mobile", "web"}
 	for _, deviceType := range deviceTypes {
-		var deviceBuildPath string = buildPath + "/" + deviceType
-		os.Mkdir(deviceBuildPath, 0777)
-		walkFilePath(path, deviceType, deviceBuildPath)
+		var deviceBuildPath = "build-target/" + deviceType
+		walkFilePath(path, deviceBuildPath, deviceType)
 	}
 }
