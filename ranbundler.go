@@ -3,7 +3,9 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -135,12 +137,16 @@ func isJavascriptFile(path string) bool {
 	return false
 }
 
-func parsePathDifference(srcPath string, dstDir string) string {
+func parsePathDifference(srcPath string, dstDir string) (string, string) {
 	rel, err := filepath.Rel(srcPath, dstDir)
 	if err != nil {
 		fmt.Println(err)
 	}
-	return rel
+	file, dir := path.Split(rel)
+
+	// Join all components except the last one
+	fmt.Println("Dir Path:", dir)
+	return file, dir
 }
 
 /**
@@ -150,21 +156,38 @@ func parsePathDifference(srcPath string, dstDir string) string {
  */
 func walkFilePath(srcDir string, directiveType string, dstDir string) {
 	filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		newPath := strings.ReplaceAll(path, "src", dstDir)
 		if info.IsDir() {
-			var pathDifference string = parsePathDifference(srcDir, path)
-			newDir := dstDir + pathDifference
-			fmt.Println("Directory:", newDir)
-			os.MkdirAll(dstDir+pathDifference, 0777)
+			os.Mkdir(newPath, 0777)
 		} else {
-			// fmt.Println("File:", path)
+			if isJavascriptFile(path) {
+				parseJavascriptFile(path, directiveType)
+			}
+			srcFile, err := os.Open(path)
+			if err != nil {
+				fmt.Println(err)
+				return err
+			}
+			defer srcFile.Close()
+
+			dstFile, err := os.Create(newPath)
+			if err != nil {
+				fmt.Println(err)
+				return err
+			}
+			defer dstFile.Close()
+
+			_, err = io.Copy(dstFile, srcFile)
+			if err != nil {
+				fmt.Println(err)
+				return err
+			}
 		}
 		if err != nil {
 			fmt.Println(err)
 			return nil
 		}
-		if isJavascriptFile(path) {
-			parseJavascriptFile(path, directiveType)
-		}
+
 		return nil
 	})
 }
@@ -174,7 +197,7 @@ func main() {
 	fmt.Println("Path:", path)
 	deviceTypes := []string{"mobile"}
 
-	var buildPath string = path + "/build-target"
+	var buildPath string = "build-target"
 	os.Mkdir(buildPath, 0777)
 	for _, deviceType := range deviceTypes {
 		var deviceBuildPath string = buildPath + "/" + deviceType
