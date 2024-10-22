@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 /**
@@ -88,6 +89,7 @@ func findExclusiveComponentParams(
  * @param {string} path - The path of the file
  */
 func parseJavascriptFile(path string, directiveType string) string {
+	// TODO: Deal with comments
 	file, err := os.Open(path)
 	if err != nil {
 		fmt.Println(err)
@@ -101,7 +103,6 @@ func parseJavascriptFile(path string, directiveType string) string {
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Println(err)
 			break
 		}
 		fileContentLines = append(fileContentLines, line)
@@ -125,8 +126,8 @@ func parseJavascriptFile(path string, directiveType string) string {
  * @param {string} path - The path of the file
  * @return {bool} - If the file is a javascript file
  */
-func isJavascriptFile(path string) bool {
-	fileExtensions := []string{".js", ".jsx", ".ts", ".tsx", ".vue", ".svelte"}
+func fileContainsUiComponents(path string) bool {
+	fileExtensions := []string{".jsx", ".tsx", ".astro", ".svelte"}
 	ext := filepath.Ext(path)
 	for _, fileExt := range fileExtensions {
 		if ext == fileExt {
@@ -141,26 +142,28 @@ func isJavascriptFile(path string) bool {
  * @param {string} path - The path of the file
  * @param {string} directiveType - The directive type
  */
-func walkFilePath(srcDir string, directiveBuildPath string, directiveType string) {
+func walkFilePath(srcDir string, directiveBuildPath string, directiveType string, ignoredPaths []string) {
 	filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
-		newPath := strings.ReplaceAll(path, "src", directiveBuildPath)
+		newPath := srcDir + strings.ReplaceAll(path, srcDir, directiveBuildPath)
+		if pathIsIgnored(path, ignoredPaths) {
+			// fmt.Println("Ignored path:", path)
+			return filepath.SkipDir
+		}
 		if info.IsDir() {
 			os.MkdirAll(newPath, 0777)
 		} else {
 			// TODO: consider returning conditional stating that the file has not Exclusive component
-			if isJavascriptFile(path) {
+			if fileContainsUiComponents(path) {
 				var fileContent = parseJavascriptFile(path, directiveType)
-				fmt.Println("File content:", fileContent)
 				file, err := os.Create(newPath)
 				if err != nil {
-					fmt.Println("Error opening file:", err)
+					fmt.Println(err)
 					return err
 				}
-				defer file.Close() // Ensure file is closed when function exits
-
+				defer file.Close()
 				_, err = file.WriteString(fileContent)
 				if err != nil {
-					fmt.Println("Error writing to file:", err)
+					fmt.Println(err)
 					return err
 				}
 			} else {
@@ -174,6 +177,7 @@ func walkFilePath(srcDir string, directiveBuildPath string, directiveType string
 				dstFile, err := os.Create(newPath)
 				if err != nil {
 					fmt.Println(err)
+
 					return err
 				}
 				defer dstFile.Close()
@@ -181,13 +185,14 @@ func walkFilePath(srcDir string, directiveBuildPath string, directiveType string
 				_, err = io.Copy(dstFile, srcFile)
 				if err != nil {
 					fmt.Println(err)
+
 					return err
 				}
 			}
-
 		}
 		if err != nil {
 			fmt.Println(err)
+
 			return nil
 		}
 
@@ -195,12 +200,61 @@ func walkFilePath(srcDir string, directiveBuildPath string, directiveType string
 	})
 }
 
+func pathIsIgnored(path string, ignoredPaths []string) bool {
+	var currentDirArray []string = strings.Split(path, "/")
+	if len(currentDirArray) == 0 {
+		return false
+	}
+	var currentDir string = currentDirArray[len(currentDirArray)-1]
+	for _, ignoredPath := range ignoredPaths {
+		if currentDir == ignoredPath {
+			return true
+		}
+	}
+	return false
+}
+
+func modifyPlatformConfigurationFile(path string, deviceType string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	// Read the entire file
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	var fileString string = string(data)
+	platformStringIndex := strings.Index(fileString, "PLATFORM")
+	platformStringTerminationIndex := strings.Index(fileString[platformStringIndex:], "}")
+	if platformStringIndex == -1 &&
+		platformStringTerminationIndex == -1 &&
+		platformStringTerminationIndex < platformStringIndex {
+		return "", fmt.Errorf("PLATFORM not found in the file")
+	}
+	newPlatformString := fmt.Sprintf(
+		`PLATFORM: { MODE: "%s", NAME: "%s", ID: "%s" }`, deviceType, deviceType, deviceType,
+	)
+	newData := strings.ReplaceAll(fileString, fileString[platformStringIndex:platformStringIndex+platformStringTerminationIndex+1], newPlatformString)
+	return newData, nil
+}
+
 func main() {
-	var path string = "/home/sanner/Coding/RAN/ran-app-native/src"
+	var path string = "/home/sanner/Coding/RAN/ran-app-native/"
 	fmt.Println("Path:", path)
 	deviceTypes := []string{"mobile", "web"}
+	ignored_paths := []string{"node_modules", "build-target", ".git", "gocomploy"}
+	var wg sync.WaitGroup
 	for _, deviceType := range deviceTypes {
-		var deviceBuildPath = "build-target/" + deviceType
-		walkFilePath(path, deviceBuildPath, deviceType)
+		wg.Add(1)
+		go func(deviceType string) {
+			defer wg.Done()
+			var deviceBuildPath = "build-target/" + deviceType + "/"
+			walkFilePath(path, deviceBuildPath, deviceType, ignored_paths)
+		}(deviceType)
 	}
+	wg.Wait()
+	modifyPlatformConfigurationFile("platform.ts", "mobile")
 }
