@@ -88,37 +88,57 @@ func findExclusiveComponentParams(
  * Parse the javascript file
  * @param {string} path - The path of the file
  */
+// func parseJavascriptFile(path string, directiveType string) string {
+// 	// TODO: Deal with comments
+// 	file, err := os.Open(path)
+// 	if err != nil {
+// 		fmt.Println(err)
+// 		return err.Error()
+// 	}
+// 	defer file.Close()
+// 	reader := bufio.NewReader(file)
+// 	var lineIndex int = 0
+// 	// Read and print lines
+// 	var fileContentLines = []string{}
+// 	for {
+// 		line, err := reader.ReadString('\n')
+// 		if err != nil {
+// 			break
+// 		}
+// 		fileContentLines = append(fileContentLines, line)
+// 		var lineString string = string(line)
+// 		var useExclusiveComponent bool
+// 		fileContentLines, useExclusiveComponent = findExclusiveComponentParams(directiveType, lineIndex, reader, fileContentLines)
+// 		if fileContentLines == nil {
+// 			fmt.Println(path)
+// 		}
+// 		if !useExclusiveComponent {
+// 			removeExclusiveComponent(
+// 				lineString,
+// 				lineIndex,
+// 				reader,
+// 			)
+// 		}
+// 		lineIndex++
+// 	}
+// 	return strings.Join(fileContentLines, "")
+// }
+
 func parseJavascriptFile(path string, directiveType string) string {
-	// TODO: Deal with comments
-	file, err := os.Open(path)
+	fileContent, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Println(err)
 		return err.Error()
 	}
-	defer file.Close()
-	reader := bufio.NewReader(file)
-	var lineIndex int = 0
-	// Read and print lines
-	var fileContentLines = []string{}
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			break
-		}
-		fileContentLines = append(fileContentLines, line)
-		var lineString string = string(line)
-		var useExclusiveComponent bool
-		fileContentLines, useExclusiveComponent = findExclusiveComponentParams(directiveType, lineIndex, reader, fileContentLines)
-		if !useExclusiveComponent {
-			removeExclusiveComponent(
-				lineString,
-				lineIndex,
-				reader,
-			)
-		}
-		lineIndex++
+	fileContentString := string(fileContent)
+	if !strings.Contains(fileContentString, "<EXCLUSIVE") {
+		return string(fileContent)
 	}
-	return strings.Join(fileContentLines, "")
+	// var tempFileString string = ""
+	for _, line := range strings.Split(fileContentString, "\n") {
+		fmt.Println(line)
+	}
+	return string(fileContent)
 }
 
 /**
@@ -155,6 +175,9 @@ func walkFilePath(srcDir string, directiveBuildPath string, directiveType string
 			// TODO: consider returning conditional stating that the file has not Exclusive component
 			if fileContainsUiComponents(path) {
 				var fileContent = parseJavascriptFile(path, directiveType)
+				if fileContent == "" {
+					return nil
+				}
 				file, err := os.Create(newPath)
 				if err != nil {
 					fmt.Println(err)
@@ -181,21 +204,17 @@ func walkFilePath(srcDir string, directiveBuildPath string, directiveType string
 					return err
 				}
 				defer dstFile.Close()
-
 				_, err = io.Copy(dstFile, srcFile)
 				if err != nil {
 					fmt.Println(err)
-
 					return err
 				}
 			}
 		}
 		if err != nil {
 			fmt.Println(err)
-
 			return nil
 		}
-
 		return nil
 	})
 }
@@ -245,7 +264,7 @@ func main() {
 	var path string = "/home/sanner/Coding/RAN/ran-app-native/"
 	fmt.Println("Path:", path)
 	deviceTypes := []string{"mobile", "web"}
-	ignored_paths := []string{"node_modules", "build-target", ".git", "gocomploy"}
+	ignored_paths := []string{"node_modules", "build-target", "src-tauri", ".git", "gocomploy"}
 	var wg sync.WaitGroup
 	for _, deviceType := range deviceTypes {
 		wg.Add(1)
