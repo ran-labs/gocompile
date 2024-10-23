@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -265,17 +264,11 @@ func main() {
 	for _, deviceType := range config.DeviceTypes {
 		wg.Add(1)
 		go func(deviceType string) {
-			defer wg.Done()
 			var deviceBuildPath = outputDir + "/" + deviceType + "/"
+			defer wg.Done()
 			walkFilePath(path, deviceBuildPath, deviceType, config.IgnoredPaths)
 			modifyPlatformConfigurationFile("platform.ts", deviceType)
 		}(deviceType)
-		command := exec.Command("pnpm", "install")
-		command.Dir = currentWorkingDirectory + "/" + outputDir + "/" + deviceType
-		err := command.Run()
-		if err != nil {
-			fmt.Println(err)
-		}
 	}
 	wg.Wait()
 }
