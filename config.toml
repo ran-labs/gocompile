@@ -1,0 +1,4 @@
+device_types = ["mobile", "web"]
+ignored_paths = ["node_modules", "build-target", "src-tauri", ".git", "gocomploy"]
+input_path = "/home/sanner/Coding/RAN/ran-app-native/"
+output_dir = "build-target"

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -8,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/pelletier/go-toml"
 )
 
 /**
@@ -182,20 +185,73 @@ func modifyPlatformConfigurationFile(path string, deviceType string) (string, er
 	return newData, nil
 }
 
+type Config struct {
+	InputPath    string   `toml:"input_path" json:"input_path"`
+	OutputDir    string   `toml:"output_dir" json:"output_dir"`
+	IgnoredPaths []string `toml:"ignored_paths" json:"ignored_paths"`
+	DeviceTypes  []string `toml:"device_types" json:"device_types"`
+}
+
+func parseTomlConfigurationFile() (Config, error) {
+	file, err := os.Open("config.toml")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	var config Config
+
+	b, err := io.ReadAll(file)
+	if err != nil {
+		panic(err)
+	}
+
+	err = toml.Unmarshal(b, &config)
+	if err != nil {
+		panic(err)
+	}
+	return config, nil
+}
+
+func parseJsonConfigurationFile(jsonFilePath string) (Config, error) {
+	jsonFile, err := os.Open(jsonFilePath)
+	if err != nil {
+		fmt.Printf("Error opening JSON file: %v\n", err)
+		return Config{}, err
+	}
+	defer jsonFile.Close()
+
+	byteValue, err := io.ReadAll(jsonFile)
+	if err != nil {
+		fmt.Printf("Error reading JSON file: %v\n", err)
+		return Config{}, err
+	}
+	var config Config
+	err = json.Unmarshal(byteValue, &config)
+	if err != nil {
+		fmt.Printf("Error unmarshalling JSON file: %v\n", err)
+		return Config{}, err
+	}
+	fmt.Println("Config:", config)
+	return config, nil
+}
+
 func main() {
-	var path string = "/home/sanner/Coding/RAN/ran-app-native/"
-	fmt.Println("Path:", path)
-	deviceTypes := []string{"mobile", "web"}
-	ignored_paths := []string{"node_modules", "build-target", "src-tauri", ".git", "gocomploy"}
+	config, err := parseJsonConfigurationFile("config.json")
+	if err != nil {
+		fmt.Println(err)
+	}
+	path := config.InputPath
+	outputDir := config.OutputDir
 	var wg sync.WaitGroup
-	for _, deviceType := range deviceTypes {
+	for _, deviceType := range config.DeviceTypes {
 		wg.Add(1)
 		go func(deviceType string) {
 			defer wg.Done()
-			var deviceBuildPath = "build-target/" + deviceType + "/"
-			walkFilePath(path, deviceBuildPath, deviceType, ignored_paths)
+			var deviceBuildPath = outputDir + "/" + deviceType + "/"
+			walkFilePath(path, deviceBuildPath, deviceType, config.IgnoredPaths)
+			modifyPlatformConfigurationFile("platform.ts", deviceType)
 		}(deviceType)
 	}
 	wg.Wait()
-	modifyPlatformConfigurationFile("platform.ts", "mobile")
 }
