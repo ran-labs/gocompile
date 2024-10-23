@@ -52,6 +52,12 @@ func removeInvalidExclusiveComponent(
 	return newFileContentString
 }
 
+/**
+ * Parse the javascript file
+ * @param {string} path - The path of the file
+ * @param {string} directiveType - The directive type
+ * @return {string} - The file content
+ */
 func parseJavascriptFile(path string, directiveType string) string {
 	fileContent, err := os.ReadFile(path)
 	if err != nil {
@@ -83,7 +89,7 @@ func fileContainsUiComponents(path string) bool {
 }
 
 /**
- * Walk through the file path
+ * Walk through the file path and create the build path in the output directory
  * @param {string} path - The path of the file
  * @param {string} directiveType - The directive type
  */
@@ -166,6 +172,12 @@ func walkFilePath(srcDir string, directiveBuildPath string, directiveType string
 	}
 }
 
+/**
+ * Check if the path is ignored
+ * @param {string} path - The path
+ * @param {[]string} ignoredPaths - The ignored paths
+ * @return {bool} - If the path is ignored
+ */
 func pathIsIgnored(path string, ignoredPaths []string) bool {
 	var currentDirArray []string = strings.Split(path, "/")
 	if len(currentDirArray) == 0 {
@@ -180,6 +192,13 @@ func pathIsIgnored(path string, ignoredPaths []string) bool {
 	return false
 }
 
+/**
+ * Modify the platform configuration file
+ * @param {string} path - The path of the file
+ * @param {string} deviceType - The device type
+ * @return {string} - The modified data
+ * @return {error} - The error
+ */
 func modifyPlatformConfigurationFile(path string, deviceType string) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -214,6 +233,11 @@ type Config struct {
 	DeviceTypes  []string `toml:"device_types" json:"device_types"`
 }
 
+/**
+ * Parse the TOML configuration file
+ * @return {Config} - The configuration
+ * @return {error} - The error
+ */
 func parseTomlConfigurationFile() (Config, error) {
 	file, err := os.Open("config.toml")
 	if err != nil {
