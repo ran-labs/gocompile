@@ -63,7 +63,6 @@ func parseJavascriptFile(path string, directiveType string) string {
 		return string(fileContent)
 	}
 	fileContent = []byte(removeInvalidExclusiveComponent(fileContentString, directiveType))
-	fmt.Println("File content:", string(fileContent))
 	return string(fileContent)
 }
 
@@ -92,7 +91,6 @@ func walkFilePath(srcDir string, directiveBuildPath string, directiveType string
 	filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		newPath := srcDir + strings.ReplaceAll(path, srcDir, directiveBuildPath)
 		if pathIsIgnored(path, ignoredPaths) {
-			// fmt.Println("Ignored path:", path)
 			return filepath.SkipDir
 		}
 		if info.IsDir() {
@@ -232,11 +230,30 @@ func parseJsonConfigurationFile(jsonFilePath string) (Config, error) {
 		fmt.Printf("Error unmarshalling JSON file: %v\n", err)
 		return Config{}, err
 	}
-	fmt.Println("Config:", config)
 	return config, nil
 }
 
+/**
+ * Get the Configuration from the configuration file
+ * @param {string} configurationFile - The configuration file
+ * @return {Config} - The configuration
+ * @return {error} - The error
+ */
+func getConfigurationFile(configurationFile string) (Config, error) {
+	if strings.HasSuffix(configurationFile, ".toml") {
+		return parseTomlConfigurationFile()
+	} else if strings.HasSuffix(configurationFile, ".json") {
+		return parseJsonConfigurationFile(configurationFile)
+	}
+	return Config{}, fmt.Errorf("invalid configuration file")
+}
+
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Please provide the configuration file path")
+		return
+	}
+	getConfigurationFile(os.Args[1])
 	config, err := parseJsonConfigurationFile("config.json")
 	if err != nil {
 		fmt.Println(err)
