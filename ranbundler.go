@@ -88,13 +88,34 @@ func fileContainsUiComponents(path string) bool {
  * @param {string} directiveType - The directive type
  */
 func walkFilePath(srcDir string, directiveBuildPath string, directiveType string, ignoredPaths []string) {
-	filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		newPath := srcDir + strings.ReplaceAll(path, srcDir, directiveBuildPath)
 		if pathIsIgnored(path, ignoredPaths) {
 			return filepath.SkipDir
 		}
 		if info.IsDir() {
-			os.MkdirAll(newPath, 0777)
+			error := os.MkdirAll(newPath, 0777)
+			if error != nil {
+				fmt.Println(error)
+				return error
+			}
+		} else if strings.Contains(path, "platform.ts") {
+			newData, err := modifyPlatformConfigurationFile(path, directiveType)
+			if err != nil {
+				fmt.Println(err)
+				return err
+			}
+			file, err := os.Create(newPath)
+			if err != nil {
+				fmt.Println(err)
+				return err
+			}
+			defer file.Close()
+			_, err = file.WriteString(newData)
+			if err != nil {
+				fmt.Println(err)
+				return err
+			}
 		} else {
 			if fileContainsUiComponents(path) {
 				var fileContent = parseJavascriptFile(path, directiveType)
@@ -140,6 +161,9 @@ func walkFilePath(srcDir string, directiveBuildPath string, directiveType string
 		}
 		return nil
 	})
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 func pathIsIgnored(path string, ignoredPaths []string) bool {
@@ -253,8 +277,7 @@ func main() {
 		fmt.Println("Please provide the configuration file path")
 		return
 	}
-	getConfigurationFile(os.Args[1])
-	config, err := parseJsonConfigurationFile("config.json")
+	config, err := getConfigurationFile(os.Args[1])
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -267,7 +290,6 @@ func main() {
 			var deviceBuildPath = outputDir + "/" + deviceType + "/"
 			defer wg.Done()
 			walkFilePath(path, deviceBuildPath, deviceType, config.IgnoredPaths)
-			modifyPlatformConfigurationFile("platform.ts", deviceType)
 		}(deviceType)
 	}
 	wg.Wait()
