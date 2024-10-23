@@ -1,47 +1,14 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 )
-
-/**
- * Removes the exclusive component from the file content
- * @param {string} line - The line of the file
- * @param {int} lineIndex - The index of the line
- * @param {bufio.Reader} reader - The reader of the file
- * @param {[]string} fileContentLines - The content of the file
- * @return {int} - The end line index of the exclusive component
- */
-func removeExclusiveComponent(
-	line string,
-	lineIndex int,
-	reader *bufio.Reader,
-) int {
-	if strings.Contains(line, "</EXCLUSIVE") {
-		return lineIndex
-	} else {
-		var componentEndLineIndex int = lineIndex
-		for {
-			componentEndLineIndex++
-			nextLine, err := reader.ReadString('\n')
-			if err != nil {
-				break
-			}
-			var currentLine string = string(nextLine)
-			// fileContentLines = append(fileContentLines, currentLine)
-			if strings.Contains(currentLine, "</EXCLUSIVE") {
-				return componentEndLineIndex
-			}
-		}
-	}
-	return -1
-}
 
 /**
  * Check if the directive type matches
@@ -51,78 +18,36 @@ func removeExclusiveComponent(
  */
 func isMatchingDirectiveType(
 	directiveType string,
-	line string,
+	component string,
 ) bool {
-	return strings.Contains(line, directiveType) || strings.Contains(line, "*")
-}
-
-func findExclusiveComponentParams(
-	directiveType string,
-	lineIndex int,
-	reader *bufio.Reader,
-	fileContentLines []string,
-) ([]string, bool) {
-	tempFileContentLines := fileContentLines
-	for {
-		lineIndex++
-		nextLine, err := reader.ReadString('\n')
-		if err != nil {
-			break
-		}
-		currentLine := string(nextLine)
-		tempFileContentLines = append(tempFileContentLines, currentLine)
-		if strings.Contains(currentLine, "OF") && !isMatchingDirectiveType(directiveType, currentLine) {
-			return fileContentLines, false
-		} // check if the directive type matches
-		if strings.Contains(currentLine, ">") {
-			fileContentLines = tempFileContentLines
-			return fileContentLines, true
-		}
+	if strings.Contains(component, "OF") {
+		return strings.Contains(component, directiveType) || strings.Contains(component, "*")
 	}
-	// Case occurs when exclusive component is not closed
-	// TODO: Add error handling (Throw an error and stop the program)
-	return nil, false
+	return true
 }
 
 /**
- * Parse the javascript file
- * @param {string} path - The path of the file
+ * Extract the exclusive component, and parent component string
+ * @param {string} fileContentString - The file content string
+ * @return {string} - The exclusive component string
+ * @return {string} - The parent component string prefix
+ * @return {string} - The parent component string suffix
  */
-// func parseJavascriptFile(path string, directiveType string) string {
-// 	// TODO: Deal with comments
-// 	file, err := os.Open(path)
-// 	if err != nil {
-// 		fmt.Println(err)
-// 		return err.Error()
-// 	}
-// 	defer file.Close()
-// 	reader := bufio.NewReader(file)
-// 	var lineIndex int = 0
-// 	// Read and print lines
-// 	var fileContentLines = []string{}
-// 	for {
-// 		line, err := reader.ReadString('\n')
-// 		if err != nil {
-// 			break
-// 		}
-// 		fileContentLines = append(fileContentLines, line)
-// 		var lineString string = string(line)
-// 		var useExclusiveComponent bool
-// 		fileContentLines, useExclusiveComponent = findExclusiveComponentParams(directiveType, lineIndex, reader, fileContentLines)
-// 		if fileContentLines == nil {
-// 			fmt.Println(path)
-// 		}
-// 		if !useExclusiveComponent {
-// 			removeExclusiveComponent(
-// 				lineString,
-// 				lineIndex,
-// 				reader,
-// 			)
-// 		}
-// 		lineIndex++
-// 	}
-// 	return strings.Join(fileContentLines, "")
-// }
+func removeInvalidExclusiveComponent(
+	fileContentString string,
+	directiveType string,
+) string {
+	newFileContentString := fileContentString
+	var exclusiveComponentRegex = regexp.MustCompile(`(?s)<EXCLUSIVE(.*?)<\/EXCLUSIVE>`)
+	var exclusiveComponentStrings = exclusiveComponentRegex.FindAllStringIndex(fileContentString, -1)
+	for _, exclusiveComponent := range exclusiveComponentStrings {
+		exclusiveComponent := fileContentString[exclusiveComponent[0]:exclusiveComponent[1]]
+		if !isMatchingDirectiveType(directiveType, exclusiveComponent) {
+			newFileContentString = strings.ReplaceAll(newFileContentString, exclusiveComponent, "")
+		}
+	}
+	return newFileContentString
+}
 
 func parseJavascriptFile(path string, directiveType string) string {
 	fileContent, err := os.ReadFile(path)
@@ -134,10 +59,8 @@ func parseJavascriptFile(path string, directiveType string) string {
 	if !strings.Contains(fileContentString, "<EXCLUSIVE") {
 		return string(fileContent)
 	}
-	// var tempFileString string = ""
-	for _, line := range strings.Split(fileContentString, "\n") {
-		fmt.Println(line)
-	}
+	fileContent = []byte(removeInvalidExclusiveComponent(fileContentString, directiveType))
+	fmt.Println("File content:", string(fileContent))
 	return string(fileContent)
 }
 
@@ -147,7 +70,7 @@ func parseJavascriptFile(path string, directiveType string) string {
  * @return {bool} - If the file is a javascript file
  */
 func fileContainsUiComponents(path string) bool {
-	fileExtensions := []string{".jsx", ".tsx", ".astro", ".svelte"}
+	fileExtensions := []string{".jsx", ".tsx", ".astro", ".svelte", ".vue"}
 	ext := filepath.Ext(path)
 	for _, fileExt := range fileExtensions {
 		if ext == fileExt {
@@ -172,7 +95,6 @@ func walkFilePath(srcDir string, directiveBuildPath string, directiveType string
 		if info.IsDir() {
 			os.MkdirAll(newPath, 0777)
 		} else {
-			// TODO: consider returning conditional stating that the file has not Exclusive component
 			if fileContainsUiComponents(path) {
 				var fileContent = parseJavascriptFile(path, directiveType)
 				if fileContent == "" {
